@@ -1,6 +1,6 @@
 import asyncio
 import platform
-import fire
+from typing import List, Tuple
 from metagpt.actions import Action
 from metagpt.logs import logger
 from metagpt.roles import Role
@@ -11,8 +11,6 @@ from metagpt.team import Team
 QUESTION = "Should AI be regulated?"
 ANSWER1 = "Yes, it should"
 ANSWER2 = "No, no need for regulation"
-
-scores = []
 
 class DefendAnswer(Action):
     PROMPT_TEMPLATE: str = """
@@ -30,49 +28,56 @@ class DefendAnswer(Action):
                                              opponent_argument=opponent_argument, feedback=feedback)
         return await self._aask(prompt)
 
-
 class JudgeAnswer(Action):
     PROMPT_TEMPLATE: str = """
-    You're a fair, impartial judge. Your role is to see into the defenses of two advocates who are defending two different answers: answer 1: 
-    {answer1} and answer 2: {answer2} to a given question: {question}. 
-    You have to give feedback that will help them improve their defenses and will help you make more difference between the 2 answers
-    to give them scores at the end that are widely distant from each other. You will be provided with the defenses of the 2 advocates.
+    You're a fair, impartial judge in a debate on: "{question}". Answer 1: "{answer1}". Answer 2: "{answer2}".
+    Your goal is to provide feedback that will help advocates improve and differentiate their arguments more clearly.
+    Current round: {current_round}
+    Total rounds: {total_rounds}
+    Previous scores: {previous_scores}
+    
     Defense for 1st answer: {defense1}
     Defense for 2nd answer: {defense2} 
-    Give your feedback directly in under 50 words.
-    Your feedback: 
+    
+    Provide specific, constructive feedback to help each advocate strengthen their unique position. 
+    Encourage them to address weaknesses and highlight distinctions.
+    Aim for your feedback to lead to more divergent scores in future rounds.
+    
+    Give your feedback in under 50 words:
     """
     name: str = "JudgeAnswer"
 
-    async def run(self, question: str, answer1: str, answer2: str, defense1: str, defense2: str):
-        prompt = self.PROMPT_TEMPLATE.format(question=question, answer1=answer1, answer2=answer2, defense1=defense1, defense2=defense2)
-        rsp = await self._aask(prompt)
-        return rsp
-
+    async def run(self, question: str, answer1: str, answer2: str, defense1: str, defense2: str, current_round: int, total_rounds: int, previous_scores: list):
+        prompt = self.PROMPT_TEMPLATE.format(
+            question=question, answer1=answer1, answer2=answer2, defense1=defense1, defense2=defense2,
+            current_round=current_round, total_rounds=total_rounds, previous_scores=previous_scores
+        )
+        return await self._aask(prompt)
 
 class ScoreAnswer(Action):
     PROMPT_TEMPLATE: str = """
-    You're a fair, impartial judge. Your role is to see into the defenses of two advocates who are defending two different answers: answer 1: 
-    {answer1} and answer 2: {answer2} to a given question: {question}. 
-    A debate has been going between the 2 advocates and now they are at their last round. They will provide their latest defenses that you should
-    see into and then score. Scores should be between 1 and 20. The best answer/defense should get a score close to 20, the other one, a score close
-    to 1.
+    You're a fair, impartial judge scoring a debate on: "{question}". Answer 1: "{answer1}". Answer 2: "{answer2}".
+    Current round: {current_round}
+    Total rounds: {total_rounds}
+    Previous scores: {previous_scores}
+    
     Last defense for 1st answer: {defense1}
     Last defense for 2nd answer: {defense2} 
-    Now, return the score in the format (score1, score2), where score1 is the score of the 1st answer, and score2 of the 2nd answer.
-    Example: if scores are 2 and 18, return only the tuple (2, 18).
-    Your scores: 
+    
+    Score each answer between 1 and 20. The stronger argument should get a score closer to 20, the weaker closer to 1.
+    Aim for a greater score difference than in previous rounds, unless one side is clearly dominant.
+    
+    Return only the score tuple (score1, score2). Example: (18, 9)
+    Your scores:
     """
     name: str = "ScoreAnswer"
 
-    async def run(self, question: str, answer1: str, answer2: str, defense1: str, defense2: str):
-        prompt = self.PROMPT_TEMPLATE.format(question=question, answer1=answer1, answer2=answer2, defense1=defense1, defense2=defense2)
-        rsp = await self._aask(prompt)
-        return rsp
-
-
-
-
+    async def run(self, question: str, answer1: str, answer2: str, defense1: str, defense2: str, current_round: int, total_rounds: int, previous_scores: list):
+        prompt = self.PROMPT_TEMPLATE.format(
+            question=question, answer1=answer1, answer2=answer2, defense1=defense1, defense2=defense2,
+            current_round=current_round, total_rounds=total_rounds, previous_scores=previous_scores
+        )
+        return await self._aask(prompt)
 
 class Advocate(Role):
     def __init__(self, name: str, answer: str, opponent_answer: str, **kwargs):
@@ -107,7 +112,7 @@ class Judge(Role):
         self.set_actions([self.judge_action])
         self._watch([DefendAnswer])
 
-    async def _act(self) -> Message:
+    async def _act(self, current_round: int, total_rounds: int, previous_scores: list) -> Message:
         logger.info("Judge: Evaluating arguments")
         memories = self.rc.memory.get(k=2)
         if len(memories) < 2:
@@ -116,7 +121,10 @@ class Judge(Role):
         advocate1_arg = memories[-2].content
         advocate2_arg = memories[-1].content
 
-        evaluation = await self.judge_action.run(question=QUESTION, answer1=ANSWER1, answer2=ANSWER2, defense1=advocate1_arg, defense2=advocate2_arg)
+        evaluation = await self.judge_action.run(question=QUESTION, answer1=ANSWER1, answer2=ANSWER2, 
+                                                 defense1=advocate1_arg, defense2=advocate2_arg,
+                                                 current_round=current_round, total_rounds=total_rounds, 
+                                                 previous_scores=previous_scores)
 
         msg = Message(content=evaluation, role=self.name)
         self.rc.memory.add(msg)
@@ -130,8 +138,8 @@ class Scorer(Role):
         self.set_actions([self.score_action])
         self._watch([DefendAnswer])
 
-    async def _act(self) -> Message:
-        logger.info("Judge: Evaluating arguments")
+    async def _act(self, current_round: int, total_rounds: int, previous_scores: list) -> Message:
+        logger.info("Scorer: Scoring arguments")
         memories = self.rc.memory.get(k=2)
         if len(memories) < 2:
             return Message(content="Waiting for more arguments.", role=self.name)
@@ -139,13 +147,16 @@ class Scorer(Role):
         advocate1_arg = memories[-2].content
         advocate2_arg = memories[-1].content
 
-        evaluation = await self.score_action.run(question=QUESTION, answer1=ANSWER1, answer2=ANSWER2, defense1=advocate1_arg, defense2=advocate2_arg)
+        scores = await self.score_action.run(question=QUESTION, answer1=ANSWER1, answer2=ANSWER2, 
+                                             defense1=advocate1_arg, defense2=advocate2_arg,
+                                             current_round=current_round, total_rounds=total_rounds, 
+                                             previous_scores=previous_scores)
 
-        msg = Message(content=evaluation, role=self.name)
+        msg = Message(content=scores, role=self.name)
         self.rc.memory.add(msg)
         return msg
 
-async def debate(investment: float = 3.0, n_round: int = 5):
+async def debate(investment: float = 3.0, n_round: int = 5) -> List[str]:
     advocate1 = Advocate(name="Advocate1", answer=ANSWER1, opponent_answer=ANSWER2)
     advocate2 = Advocate(name="Advocate2", answer=ANSWER2, opponent_answer=ANSWER1)
     judge = Judge()
@@ -155,42 +166,56 @@ async def debate(investment: float = 3.0, n_round: int = 5):
     print(f"Advocate1 defends: {ANSWER1}")
     print(f"Advocate2 defends: {ANSWER2}\n")
 
-    # Manually start the debate
     initial_msg = Message(content=QUESTION, role="Human", cause_by=DefendAnswer)
     advocate1.rc.memory.add(initial_msg)
+
+    previous_scores = []
+    scores = []
 
     for i in range(n_round):
         print(f"Round {i+1}:")
         
-        # Advocate1's turn
         msg1 = await advocate1._act()
         advocate2.rc.memory.add(Message(content=msg1.content, role="Opponent of Advocate2", cause_by=DefendAnswer))
-        judge.rc.memory.add(msg1)  # Add to Judge's memory
+        judge.rc.memory.add(msg1)
         scorer.rc.memory.add(msg1)
         print(f"Advocate1: {msg1.content}")
 
-        # Advocate2's turn
         msg2 = await advocate2._act()
         advocate1.rc.memory.add(Message(content=msg2.content, role="Opponent of Advocate1", cause_by=DefendAnswer))
-        judge.rc.memory.add(msg2)  # Add to Judge's memory
+        judge.rc.memory.add(msg2)
         scorer.rc.memory.add(msg2)
         print(f"Advocate2: {msg2.content}")
 
-        # Judge's turn
-        judge_msg = await judge._act()
+        judge_msg = await judge._act(current_round=i+1, total_rounds=n_round, previous_scores=previous_scores)
         advocate1.rc.memory.add(judge_msg)
         advocate2.rc.memory.add(judge_msg)
-        score_msg = await scorer._act()
         print(f"Judge: {judge_msg.content}")
+
+        score_msg = await scorer._act(current_round=i+1, total_rounds=n_round, previous_scores=previous_scores)
         print(f"Scorer: {score_msg.content}")
         scores.append(score_msg.content)
-
+        
+        # Parse and store the new scores
+        new_scores = eval(score_msg.content)
+        previous_scores.append(new_scores)
+        
         print()  # Add a blank line between rounds
 
-def main(investment: float = 0.1, n_round: int = 3):
-    if platform.system() == "Windows":
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    asyncio.run(debate(investment, n_round))
+    # Print final scores
+    print("Final Scores:")
+    for round_num, (score1, score2) in enumerate(previous_scores, 1):
+        print(f"Round {round_num}: Advocate1 - {score1}, Advocate2 - {score2}")
 
-if __name__ == "__main__":
-    fire.Fire(main)
+    return scores
+
+async def run_debate(investment: float = 0.1, n_round: int = 3) -> List[str]:
+    return await debate(investment, n_round)
+# # Run the debate
+# async def main():
+#     scores = await debate(investment=0.1, n_round=3)
+#     print("\nReturned Scores:")
+#     print(scores)
+
+# # This is the correct way to run asyncio in Colab
+# await main()
