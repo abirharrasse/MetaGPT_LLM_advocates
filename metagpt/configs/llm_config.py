@@ -34,7 +34,7 @@ class LLMType(Enum):
     OPENROUTER = "openrouter"
     BEDROCK = "bedrock"
     ARK = "ark"
-
+    TOGETHER = "together"
     def __missing__(self, key):
         return self.OPENAI
 
