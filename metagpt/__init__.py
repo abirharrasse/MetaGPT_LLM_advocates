@@ -18,7 +18,6 @@ from metagpt.provider.dashscope_api import DashScopeLLM
 from metagpt.provider.anthropic_api import AnthropicLLM
 from metagpt.provider.bedrock_api import BedrockLLM
 from metagpt.provider.ark_api import ArkLLM
-from metagpt.provider.own_api import OwnLLM
 
 __all__ = [
     "GeminiLLM",
