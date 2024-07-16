@@ -179,8 +179,8 @@ async def debate(question:str, answer1:str, answer2:str, investment: float = 3.0
     print("Initializing debate...")
     advocate1 = Advocate(name="Advocate1", question=question, answer=answer1, opponent_answer=answer2)
     advocate2 = Advocate(name="Advocate2", question=question, answer=answer2, opponent_answer=answer1)
-    judge = Judge(question=question, answer1=answer1, answer2=asnwer2)
-    scorer = Scorer()
+    judge = Judge(question=question, answer1=answer1, answer2=answer2)
+    scorer = Scorer(question=question, answer1=answer1, answer2=answer2)
     
     print(f"Debate Question: {question}")
     print(f"Advocate1 defends: {answer1}")
