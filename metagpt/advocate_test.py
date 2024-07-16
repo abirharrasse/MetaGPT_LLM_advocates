@@ -1,4 +1,5 @@
 import asyncio
+import nest_asyncio
 import platform
 from typing import List, Tuple
 import re
@@ -7,6 +8,7 @@ from metagpt.logs import logger
 from metagpt.roles import Role
 from metagpt.schema import Message
 from metagpt.team import Team
+import argparse
 
 print("Starting debate script...")
 
@@ -166,10 +168,10 @@ class Scorer(Role):
         self.rc.memory.add(msg)
         return msg
 
-async def debate(investment: float = 3.0, n_round: int = 5) -> List[str]:
+async def debate(question:str, answer1:str, answer2:str, investment: float = 3.0, n_round: int = 5) -> List[str]:
     print("Initializing debate...")
-    advocate1 = Advocate(name="Advocate1", answer=ANSWER1, opponent_answer=ANSWER2)
-    advocate2 = Advocate(name="Advocate2", answer=ANSWER2, opponent_answer=ANSWER1)
+    advocate1 = Advocate(name="Advocate1", answer=answer1, opponent_answer=answer2)
+    advocate2 = Advocate(name="Advocate2", answer=answer2, opponent_answer=answer1)
     judge = Judge()
     scorer = Scorer()
     
@@ -177,7 +179,7 @@ async def debate(investment: float = 3.0, n_round: int = 5) -> List[str]:
     print(f"Advocate1 defends: {ANSWER1}")
     print(f"Advocate2 defends: {ANSWER2}\n")
 
-    initial_msg = Message(content=QUESTION, role="Human", cause_by=DefendAnswer)
+    initial_msg = Message(content=question, role="Human", cause_by=DefendAnswer)
     advocate1.rc.memory.add(initial_msg)
 
     previous_scores = []
@@ -232,10 +234,43 @@ async def debate(investment: float = 3.0, n_round: int = 5) -> List[str]:
     print("Debate completed.")
     return scores
 
-async def run_debate(investment: float = 0.1, n_round: int = 3) -> List[str]:
+# async def run_debate(question:str, answer1:str, answer2:str, investment: float = 0.1, n_round: int = 3) -> List[str]:
+#     try:
+#         print("Starting run_debate function...")
+#         scores = await debate(question, answer1, answer2, investment, n_round)
+#         print("Debate completed successfully.")
+#         return scores
+#     except Exception as e:
+#         print(f"An error occurred during the debate: {str(e)}")
+#         import traceback
+#         traceback.print_exc()
+#         return []  # Return an empty list instead of raising an exception
+
+# async def main():
+#     print("Starting main function...")
+#     parser = argparse.ArgumentParser(description="Run an AI debate.")
+#     parser.add_argument("--question", type=str, required=True, help="The debate question")
+#     parser.add_argument("--answer1", type=str, required=True, help="First answer")
+#     parser.add_argument("--answer2", type=str, required=True, help="Second answer")
+#     parser.add_argument("--investment", type=float, default=0.1, help="Investment amount")
+#     parser.add_argument("--n-rounds", type=int, default=3, help="Number of debate rounds")
+    
+#     args = parser.parse_args()
+    
+#     try:
+#         scores = await run_debate(args.question, args.answer1, args.answer2, investment=args.investment, n_round=args.n_rounds)
+#         print("\nReturned Scores:")
+#         print(scores)
+#     except Exception as e:
+#         print(f"An error occurred in main: {str(e)}")
+
+# if __name__ == "__main__":
+#     print("Starting debate script...")
+#     asyncio.run(main())
+async def run_debate(question: str, answer1: str, answer2: str, investment: float = 0.1, n_round: int = 3) -> List[str]:
     try:
         print("Starting run_debate function...")
-        scores = await debate(investment, n_round)
+        scores = await debate(question=question, answer1=answer1, answer2=answer2, investment=investment, n_round=n_round)
         print("Debate completed successfully.")
         return scores
     except Exception as e:
@@ -244,14 +279,18 @@ async def run_debate(investment: float = 0.1, n_round: int = 3) -> List[str]:
         traceback.print_exc()
         return []  # Return an empty list instead of raising an exception
 
-async def main():
-    print("Starting main function...")
-    try:
-        scores = await run_debate(investment=0.1, n_round=3)
-        print("\nReturned Scores:")
-        print(scores)
-    except Exception as e:
-        print(f"An error occurred in main: {str(e)}")
 
-if __name__ == "__main__":
-    asyncio.run(main())
+nest_asyncio.apply()
+
+
+def get_debate_scores(question: str, answer1: str, answer2: str, investment: float = 0.1, n_round: int = 3) -> List[str]:
+    loop = asyncio.get_event_loop()
+    return loop.run_until_complete(run_debate(question, answer1, answer2, investment, n_round))
+
+
+
+
+
+
+
+
