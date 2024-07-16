@@ -13,9 +13,7 @@ import argparse
 print("Starting debate script...")
 
 # Global variables for debate content
-QUESTION = "Should AI be regulated?"
-ANSWER1 = "Yes, it should"
-ANSWER2 = "No, no need for regulation"
+
 
 class DefendAnswer(Action):
     PROMPT_TEMPLATE: str = """
@@ -117,9 +115,10 @@ class ScoreAnswer(Action):
             return "(0, 0)"  # Default scores if no valid tuple is found
 
 class Advocate(Role):
-    def __init__(self, name: str, answer: str, opponent_answer: str, advocate_id: int, **kwargs):
+    def __init__(self, name: str, question:str, answer: str, opponent_answer: str, advocate_id: int, **kwargs):
         super().__init__(**kwargs)
         self.name = name
+        self.question = question
         self.answer = answer
         self.opponent_answer = opponent_answer
         self.advocate_id = advocate_id
@@ -135,7 +134,7 @@ class Advocate(Role):
         opponent_argument = opponent_memories[-1].content if opponent_memories else ""
         feedback = self.rc.memory.get_by_role(role="Judge")[-1].content if self.rc.memory.get_by_role(role="Judge") else ""
 
-        new_defense = await self.defend_action.run(question=QUESTION, answer=self.answer, opponent_answer=self.opponent_answer,
+        new_defense = await self.defend_action.run(question=self.question, answer=self.answer, opponent_answer=self.opponent_answer,
                                      opponent_argument=opponent_argument, feedback=feedback, 
                                      advocate_id=self.advocate_id, team_arguments=team_arguments)
 
@@ -144,7 +143,7 @@ class Advocate(Role):
         return msg
 
 class Aggregator(Role):
-    def __init__(self, name: str, answer: str, opponent_answer: str, **kwargs):
+    def __init__(self, name: str, question:str, answer: str, opponent_answer: str, **kwargs):
         super().__init__(**kwargs)
         self.name = name
         self.answer = answer
@@ -157,7 +156,7 @@ class Aggregator(Role):
         logger.info(f"{self.name}: Aggregating and improving defenses")
         feedback = self.rc.memory.get_by_role(role="Judge")[-1].content if self.rc.memory.get_by_role(role="Judge") else ""
 
-        aggregated_defense = await self.aggregate_action.run(question=QUESTION, answer=self.answer, 
+        aggregated_defense = await self.aggregate_action.run(question=self.question, answer=self.answer, 
                                                              opponent_answer=self.opponent_answer,
                                                              defenses=defenses, feedback=feedback)
 
@@ -166,10 +165,10 @@ class Aggregator(Role):
         return msg
 
 class AdvocateGroup:
-    def __init__(self, name: str, answer: str, opponent_answer: str, n_advocates: int):
+    def __init__(self, name: str, question:str, answer: str, opponent_answer: str, n_advocates: int):
         self.name = name
-        self.advocates = [Advocate(f"{name}_Advocate{i+1}", answer, opponent_answer, i+1) for i in range(n_advocates)]
-        self.aggregator = Aggregator(f"{name}_Aggregator", answer, opponent_answer)
+        self.advocates = [Advocate(f"{name}_Advocate{i+1}", question, answer, opponent_answer, i+1) for i in range(n_advocates)]
+        self.aggregator = Aggregator(f"{name}_Aggregator", question, answer, opponent_answer)
         self.answer = answer
         self.opponent_answer = opponent_answer
 
@@ -183,9 +182,12 @@ class AdvocateGroup:
         return aggregated_defense.content
 
 class Judge(Role):
-    def __init__(self, **kwargs):
+    def __init__(self, question, answer1, answer2, **kwargs):
         super().__init__(**kwargs)
         self.name = "Judge"
+        self.question = question
+        self.answer1 = answer1
+        self.answer2 = answer2
         self.judge_action = JudgeAnswer()
         self.set_actions([self.judge_action])
         self._watch([DefendAnswer, AggregateDefense])
@@ -199,7 +201,7 @@ class Judge(Role):
         advocate1_arg = memories[-2].content
         advocate2_arg = memories[-1].content
 
-        evaluation = await self.judge_action.run(question=QUESTION, answer1=ANSWER1, answer2=ANSWER2, 
+        evaluation = await self.judge_action.run(question=self.question, answer1=self.answer1, answer2=self.answer2, 
                                                  defense1=advocate1_arg, defense2=advocate2_arg,
                                                  current_round=current_round, total_rounds=total_rounds, 
                                                  previous_scores=previous_scores)
@@ -209,9 +211,12 @@ class Judge(Role):
         return msg
 
 class Scorer(Role):
-    def __init__(self, **kwargs):
+    def __init__(self, question, answer1, answer2, **kwargs):
         super().__init__(**kwargs)
         self.name = "Scorer"
+        self.question = question
+        self.answer1 = answer1
+        self.answer2 = answer2
         self.score_action = ScoreAnswer()
         self.set_actions([self.score_action])
         self._watch([DefendAnswer, AggregateDefense])
@@ -225,7 +230,7 @@ class Scorer(Role):
         advocate1_arg = memories[-2].content
         advocate2_arg = memories[-1].content
 
-        scores = await self.score_action.run(question=QUESTION, answer1=ANSWER1, answer2=ANSWER2, 
+        scores = await self.score_action.run(question=self.question, answer1=self.answer1, answer2=self.answer2, 
                                              defense1=advocate1_arg, defense2=advocate2_arg,
                                              current_round=current_round, total_rounds=total_rounds, 
                                              previous_scores=previous_scores)
@@ -236,10 +241,10 @@ class Scorer(Role):
 
 async def debate(question:str, answer1:str, answer2:str, investment: float = 3.0, n_round: int = 5, n_advocates: int = 3) -> List[str]:
     print("Initializing debate...")
-    advocate_group1 = AdvocateGroup(name="AdvocateGroup1", answer=answer1, opponent_answer=answer2, n_advocates=n_advocates)
-    advocate_group2 = AdvocateGroup(name="AdvocateGroup2", answer=answer2, opponent_answer=answer1, n_advocates=n_advocates)
-    judge = Judge()
-    scorer = Scorer()
+    advocate_group1 = AdvocateGroup(name="AdvocateGroup1", question=question, answer=answer1, opponent_answer=answer2, n_advocates=n_advocates)
+    advocate_group2 = AdvocateGroup(name="AdvocateGroup2", question=question, answer=answer2, opponent_answer=answer1, n_advocates=n_advocates)
+    judge = Judge(question=question, answer1=answer1, answer2=answer2)
+    scorer = Scorer(question=question, answer1=answer1, answer2=answer2)
     
     print(f"Debate Question: {question}")
     print(f"AdvocateGroup1 defends: {answer1}")
