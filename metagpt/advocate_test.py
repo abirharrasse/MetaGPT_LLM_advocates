@@ -1,11 +1,14 @@
 import asyncio
 import platform
 from typing import List, Tuple
+import re
 from metagpt.actions import Action
 from metagpt.logs import logger
 from metagpt.roles import Role
 from metagpt.schema import Message
 from metagpt.team import Team
+
+print("Starting debate script...")
 
 # Global variables for debate content
 QUESTION = "Should AI be regulated?"
@@ -77,7 +80,14 @@ class ScoreAnswer(Action):
             question=question, answer1=answer1, answer2=answer2, defense1=defense1, defense2=defense2,
             current_round=current_round, total_rounds=total_rounds, previous_scores=previous_scores
         )
-        return await self._aask(prompt)
+        response = await self._aask(prompt)
+        
+        # Extract the tuple from the response
+        tuple_match = re.search(r'\((\d+),\s*(\d+)\)', response)
+        if tuple_match:
+            return f"({tuple_match.group(1)}, {tuple_match.group(2)})"
+        else:
+            return "(0, 0)"  # Default scores if no valid tuple is found
 
 class Advocate(Role):
     def __init__(self, name: str, answer: str, opponent_answer: str, **kwargs):
@@ -157,6 +167,7 @@ class Scorer(Role):
         return msg
 
 async def debate(investment: float = 3.0, n_round: int = 5) -> List[str]:
+    print("Initializing debate...")
     advocate1 = Advocate(name="Advocate1", answer=ANSWER1, opponent_answer=ANSWER2)
     advocate2 = Advocate(name="Advocate2", answer=ANSWER2, opponent_answer=ANSWER1)
     judge = Judge()
@@ -173,32 +184,43 @@ async def debate(investment: float = 3.0, n_round: int = 5) -> List[str]:
     scores = []
 
     for i in range(n_round):
-        print(f"Round {i+1}:")
+        print(f"Starting Round {i+1}...")
         
+        print("Advocate1 preparing argument...")
         msg1 = await advocate1._act()
+        print(f"Advocate1 argument: {msg1.content}")
         advocate2.rc.memory.add(Message(content=msg1.content, role="Opponent of Advocate2", cause_by=DefendAnswer))
         judge.rc.memory.add(msg1)
         scorer.rc.memory.add(msg1)
-        print(f"Advocate1: {msg1.content}")
 
+        print("Advocate2 preparing argument...")
         msg2 = await advocate2._act()
+        print(f"Advocate2 argument: {msg2.content}")
         advocate1.rc.memory.add(Message(content=msg2.content, role="Opponent of Advocate1", cause_by=DefendAnswer))
         judge.rc.memory.add(msg2)
         scorer.rc.memory.add(msg2)
-        print(f"Advocate2: {msg2.content}")
 
+        print("Judge evaluating...")
         judge_msg = await judge._act(current_round=i+1, total_rounds=n_round, previous_scores=previous_scores)
+        print(f"Judge evaluation: {judge_msg.content}")
         advocate1.rc.memory.add(judge_msg)
         advocate2.rc.memory.add(judge_msg)
-        print(f"Judge: {judge_msg.content}")
 
+        print("Scorer scoring...")
         score_msg = await scorer._act(current_round=i+1, total_rounds=n_round, previous_scores=previous_scores)
-        print(f"Scorer: {score_msg.content}")
+        print(f"Raw Scores: {score_msg.content}")
         scores.append(score_msg.content)
         
         # Parse and store the new scores
-        new_scores = eval(score_msg.content)
-        previous_scores.append(new_scores)
+        try:
+            new_scores = eval(score_msg.content)
+            if not isinstance(new_scores, tuple) or len(new_scores) != 2:
+                raise ValueError("Invalid score format")
+            previous_scores.append(new_scores)
+            print(f"Parsed Scores: {new_scores}")
+        except Exception as e:
+            print(f"Error parsing scores: {e}")
+            previous_scores.append((0, 0))  # Default scores if parsing fails
         
         print()  # Add a blank line between rounds
 
@@ -207,15 +229,29 @@ async def debate(investment: float = 3.0, n_round: int = 5) -> List[str]:
     for round_num, (score1, score2) in enumerate(previous_scores, 1):
         print(f"Round {round_num}: Advocate1 - {score1}, Advocate2 - {score2}")
 
+    print("Debate completed.")
     return scores
 
 async def run_debate(investment: float = 0.1, n_round: int = 3) -> List[str]:
-    return await debate(investment, n_round)
-# # Run the debate
-# async def main():
-#     scores = await debate(investment=0.1, n_round=3)
-#     print("\nReturned Scores:")
-#     print(scores)
+    try:
+        print("Starting run_debate function...")
+        scores = await debate(investment, n_round)
+        print("Debate completed successfully.")
+        return scores
+    except Exception as e:
+        print(f"An error occurred during the debate: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return []  # Return an empty list instead of raising an exception
 
-# # This is the correct way to run asyncio in Colab
-# await main()
+async def main():
+    print("Starting main function...")
+    try:
+        scores = await run_debate(investment=0.1, n_round=3)
+        print("\nReturned Scores:")
+        print(scores)
+    except Exception as e:
+        print(f"An error occurred in main: {str(e)}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
