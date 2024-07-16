@@ -13,9 +13,9 @@ import argparse
 print("Starting debate script...")
 
 # Global variables for debate content
-QUESTION = "Should AI be regulated?"
-ANSWER1 = "Yes, it should"
-ANSWER2 = "No, no need for regulation"
+# QUESTION = "Should AI be regulated?"
+# ANSWER1 = "Yes, it should"
+# ANSWER2 = "No, no need for regulation"
 
 class DefendAnswer(Action):
     PROMPT_TEMPLATE: str = """
@@ -92,10 +92,11 @@ class ScoreAnswer(Action):
             return "(0, 0)"  # Default scores if no valid tuple is found
 
 class Advocate(Role):
-    def __init__(self, name: str, answer: str, opponent_answer: str, **kwargs):
+    def __init__(self, name: str, question: str, answer: str, opponent_answer: str, **kwargs):
         super().__init__(**kwargs)
         self.name = name
         self.answer = answer
+        self.question = question
         self.opponent_answer = opponent_answer
         self.defend_action = DefendAnswer()
         self.set_actions([self.defend_action])
@@ -109,7 +110,7 @@ class Advocate(Role):
         opponent_argument = opponent_memories[-1].content if opponent_memories else ""
         feedback = self.rc.memory.get_by_role(role="Judge")[-1].content if self.rc.memory.get_by_role(role="Judge") else ""
 
-        new_defense = await self.defend_action.run(question=QUESTION, answer=self.answer, opponent_answer=self.opponent_answer,
+        new_defense = await self.defend_action.run(question=self.question, answer=self.answer, opponent_answer=self.opponent_answer,
                                      opponent_argument=opponent_argument, feedback=feedback)
 
         msg = Message(content=new_defense, role=self.name, cause_by=DefendAnswer)
@@ -117,9 +118,12 @@ class Advocate(Role):
         return msg
 
 class Judge(Role):
-    def __init__(self, **kwargs):
+    def __init__(self, question:str, answer1:str, answer2:str, **kwargs):
         super().__init__(**kwargs)
         self.name = "Judge"
+        self.question = question
+        self.answer1 = answer1
+        self.answer2 = answer2
         self.judge_action = JudgeAnswer()
         self.set_actions([self.judge_action])
         self._watch([DefendAnswer])
@@ -133,7 +137,7 @@ class Judge(Role):
         advocate1_arg = memories[-2].content
         advocate2_arg = memories[-1].content
 
-        evaluation = await self.judge_action.run(question=QUESTION, answer1=ANSWER1, answer2=ANSWER2, 
+        evaluation = await self.judge_action.run(question=self.question, answer1=self.answer1, answer2=self.answer2, 
                                                  defense1=advocate1_arg, defense2=advocate2_arg,
                                                  current_round=current_round, total_rounds=total_rounds, 
                                                  previous_scores=previous_scores)
@@ -143,9 +147,12 @@ class Judge(Role):
         return msg
 
 class Scorer(Role):
-    def __init__(self, **kwargs):
+    def __init__(self, question:str, answer1:str, answer2:str, **kwargs):
         super().__init__(**kwargs)
         self.name = "Scorer"
+        self.question = question
+        self.answer1 = answer1
+        self.answer2 = answer2
         self.score_action = ScoreAnswer()
         self.set_actions([self.score_action])
         self._watch([DefendAnswer])
@@ -159,7 +166,7 @@ class Scorer(Role):
         advocate1_arg = memories[-2].content
         advocate2_arg = memories[-1].content
 
-        scores = await self.score_action.run(question=QUESTION, answer1=ANSWER1, answer2=ANSWER2, 
+        scores = await self.score_action.run(question=self.question, answer1=self.answer1, answer2=self.answer2, 
                                              defense1=advocate1_arg, defense2=advocate2_arg,
                                              current_round=current_round, total_rounds=total_rounds, 
                                              previous_scores=previous_scores)
@@ -170,14 +177,14 @@ class Scorer(Role):
 
 async def debate(question:str, answer1:str, answer2:str, investment: float = 3.0, n_round: int = 5) -> List[str]:
     print("Initializing debate...")
-    advocate1 = Advocate(name="Advocate1", answer=answer1, opponent_answer=answer2)
-    advocate2 = Advocate(name="Advocate2", answer=answer2, opponent_answer=answer1)
-    judge = Judge()
+    advocate1 = Advocate(name="Advocate1", question=question, answer=answer1, opponent_answer=answer2)
+    advocate2 = Advocate(name="Advocate2", question=question, answer=answer2, opponent_answer=answer1)
+    judge = Judge(question=question, answer1=answer1, answer2=asnwer2)
     scorer = Scorer()
     
-    print(f"Debate Question: {QUESTION}")
-    print(f"Advocate1 defends: {ANSWER1}")
-    print(f"Advocate2 defends: {ANSWER2}\n")
+    print(f"Debate Question: {question}")
+    print(f"Advocate1 defends: {answer1}")
+    print(f"Advocate2 defends: {answer2}\n")
 
     initial_msg = Message(content=question, role="Human", cause_by=DefendAnswer)
     advocate1.rc.memory.add(initial_msg)
