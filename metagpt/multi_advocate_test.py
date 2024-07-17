@@ -147,6 +147,7 @@ class Aggregator(Role):
         super().__init__(**kwargs)
         self.name = name
         self.answer = answer
+        self.question = question
         self.opponent_answer = opponent_answer
         self.aggregate_action = AggregateDefense()
         self.set_actions([self.aggregate_action])
