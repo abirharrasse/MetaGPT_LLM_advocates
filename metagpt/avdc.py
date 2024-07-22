@@ -115,14 +115,6 @@ class ScoreAnswer(Action):
         )
         response = await self._aask(prompt)
 
-
-        # Find all tuples in the response
-        # all_tuples = re.findall(r'\((\d+),\s*(\d+)\)', response)
-        # tuple_match = all_tuples[-1]
-        # if tuple_match:
-        #     return f"({tuple_match.group(1)}, {tuple_match.group(2)})"
-        # else:
-        #     return "(0, 0)"  # Default scores if no valid tuple is found
         tuple_match = re.search(r'\((\d+),\s*(\d+)\)', response)
         if tuple_match:
             return f"({tuple_match.group(1)}, {tuple_match.group(2)})"
@@ -130,8 +122,8 @@ class ScoreAnswer(Action):
             return "(0, 0)"  # Default scores if no valid tuple is found
 
 class Advocate(Role):
-    def _init_(self, name: str, question: str, answer: str, opponent_answer: str, **kwargs):
-        super()._init_(**kwargs)
+    def __init__(self, name: str, question: str, answer: str, opponent_answer: str, **kwargs):
+        super().__init__(**kwargs)
         self.name = name
         self.answer = answer
         self.question = question
@@ -148,7 +140,7 @@ class Advocate(Role):
         opponent_argument = opponent_memories[-1].content if opponent_memories else ""
         feedback = self.rc.memory.get_by_role(role="Judge")[-1].content if self.rc.memory.get_by_role(role="Judge") else ""
 
-        new_defense = await self.defend_action.run(self, question=self.question, answer=self.answer, opponent_answer=self.opponent_answer,
+        new_defense = await self.defend_action.run(question=self.question, answer=self.answer, opponent_answer=self.opponent_answer,
                                      opponent_argument=opponent_argument, feedback=feedback)
 
         msg = Message(content=new_defense, role=self.name, cause_by=DefendAnswer)
@@ -156,8 +148,8 @@ class Advocate(Role):
         return msg
 
 class Judge(Role):
-    def _init_(self, question:str, answer1:str, answer2:str, **kwargs):
-        super()._init_(**kwargs)
+    def __init__(self, question:str, answer1:str, answer2:str, **kwargs):
+        super().__init__(**kwargs)
         self.name = "Judge"
         self.question = question
         self.answer1 = answer1
@@ -185,8 +177,8 @@ class Judge(Role):
         return msg
 
 class Scorer(Role):
-    def _init_(self, question:str, answer1:str, answer2:str, **kwargs):
-        super()._init_(**kwargs)
+    def __init__(self, question:str, answer1:str, answer2:str, **kwargs):
+        super().__init__(**kwargs)
         self.name = "Scorer"
         self.question = question
         self.answer1 = answer1
@@ -213,11 +205,33 @@ class Scorer(Role):
         self.rc.memory.add(msg)
         return msg
 
+class InitialScorer(Role):
+    def __init__(self, question:str, answer1:str, answer2:str, **kwargs):
+        super().__init__(**kwargs)
+        self.name = "InitialScorer"
+        self.question = question
+        self.answer1 = answer1
+        self.answer2 = answer2
+        self.score_action = ScoreAnswer()
+        self.set_actions([self.score_action])
+
+    async def _act(self) -> Message:
+        logger.info("InitialScorer: Scoring initial answers")
+        scores = await self.score_action.run(question=self.question, answer1=self.answer1, answer2=self.answer2, 
+                                             defense1="", defense2="",
+                                             current_round=0, total_rounds=0, 
+                                             previous_scores=[])
+
+        msg = Message(content=scores, role=self.name)
+        self.rc.memory.add(msg)
+        return msg
+
 async def debate(question:str, answer1:str, answer2:str, investment: float = 3.0, n_round: int = 5) -> List[str]:
     print("Initializing debate...")
     advocate1 = Advocate(name="Advocate1", question=question, answer=answer1, opponent_answer=answer2)
     advocate2 = Advocate(name="Advocate2", question=question, answer=answer2, opponent_answer=answer1)
     judge = Judge(question=question, answer1=answer1, answer2=answer2)
+    initial_scorer = InitialScorer(question=question, answer1=answer1, answer2=answer2)
     scorer = Scorer(question=question, answer1=answer1, answer2=answer2)
     
     print(f"Debate Question: {question}")
@@ -227,11 +241,24 @@ async def debate(question:str, answer1:str, answer2:str, investment: float = 3.0
     initial_msg = Message(content=question, role="Human", cause_by=DefendAnswer)
     advocate1.rc.memory.add(initial_msg)
 
+    print("Scoring initial answers...")
+    initial_score_msg = await initial_scorer._act()
+    print(f"Initial Scores: {initial_score_msg.content}")
+
     previous_scores = []
-    scores = []
+    scores = [initial_score_msg.content]
+
+    try:
+        initial_scores = eval(initial_score_msg.content)
+        if isinstance(initial_scores, tuple) and len(initial_scores) == 2:
+            previous_scores.append(initial_scores)
+            print(f"Parsed Initial Scores: {initial_scores}")
+    except Exception as e:
+        print(f"Error parsing initial scores: {e}")
+        previous_scores.append((0, 0))  # Default scores if parsing fails
 
     for i in range(n_round):
-        print(f"Starting Round {i+1}...")
+        print(f"\nStarting Round {i+1}...")
         
         print("Advocate1 preparing argument...")
         msg1 = await advocate1._act()
@@ -258,7 +285,6 @@ async def debate(question:str, answer1:str, answer2:str, investment: float = 3.0
         print(f"Raw Scores: {score_msg.content}")
         scores.append(score_msg.content)
         
-        # Parse and store the new scores
         try:
             new_scores = eval(score_msg.content)
             if not isinstance(new_scores, tuple) or len(new_scores) != 2:
@@ -268,12 +294,10 @@ async def debate(question:str, answer1:str, answer2:str, investment: float = 3.0
         except Exception as e:
             print(f"Error parsing scores: {e}")
             previous_scores.append((0, 0))  # Default scores if parsing fails
-        
-        print()  # Add a blank line between rounds
 
-    # Print final scores
-    print("Final Scores:")
-    for round_num, (score1, score2) in enumerate(previous_scores, 1):
+    print("\nFinal Scores:")
+    print(f"Initial: Advocate1 - {previous_scores[0][0]}, Advocate2 - {previous_scores[0][1]}")
+    for round_num, (score1, score2) in enumerate(previous_scores[1:], 1):
         print(f"Round {round_num}: Advocate1 - {score1}, Advocate2 - {score2}")
 
     print("Debate completed.")
@@ -296,3 +320,8 @@ nest_asyncio.apply()
 def get_debate_scores(question: str, answer1: str, answer2: str, investment: float = 0.1, n_round: int = 3) -> List[str]:
     loop = asyncio.get_event_loop()
     return loop.run_until_complete(run_debate(question, answer1, answer2, investment, n_round))
+
+# Example usage
+if __name__ == "__main__":
+    question = "What is the best way to learn a new language?"
+    answer1 = "Immersion in a country
