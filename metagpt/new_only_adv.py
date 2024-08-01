@@ -79,7 +79,7 @@ class EnhancedJudgeAnswer(Action):
     5. Strength of reasoning and factual support
     6. Effectiveness in addressing opponent's points
 
-    For each criterion, provide a score on a scale of 1-4 and detailed justification.
+    For each criterion, provide a score on a scale of 1-20 and detailed justification.
     Scores should be given as [Answer1_score, Answer2_score] for each criterion.
 
     Your comprehensive feedback for each advocate (50 words each):
