@@ -319,7 +319,7 @@ async def debate(question:str, answer1:str, answer2:str, investment: float = 3.0
         print()  # Add a blank line between rounds
 
     # Print final scores
-    print("Final Scores:")
+    print("Final Scores:") 
     for round_num, (score1, score2) in enumerate(previous_scores, 1):
         print(f"Round {round_num}: AdvocateGroup1 - {score1}, AdvocateGroup2 - {score2}")
 
