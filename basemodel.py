@@ -50,8 +50,7 @@ def judge_answers_other(judge_model, temp, question, answer1, answer2):
       messages=[
           {"role": "user", "content": prompt}
       ],
-      temperature=temp,
-      max_tokens=500
+      temperature=temp
       )
     scores = response.choices[0].message.content
 
@@ -79,20 +78,16 @@ def judge_answers_other(judge_model, temp, question, answer1, answer2):
         messages=[{"role": "user", "content": prompt}],
     )
     scores = message.choices[0].message.content
-
-
-
-
-
+  return scores
 
 
 def judge_answers(judge_model, temp, question, answer1, answer2):
 
   prompt = f"""
-  You are a fair, impartial judge scoring a debate on the following question: "{question}".
+  You are a fair, impartial judge scoring a debate on the following question: {question}.
 
-  Answer 1: "{answer1}"
-  Answer 2: "{answer2}"
+  Answer 1: {answer1}
+  Answer 2: {answer2}
 
   Score each answer on a scale of 1-20 for each of the following criteria:
     1. Relevance to the question
@@ -126,8 +121,7 @@ def judge_answers(judge_model, temp, question, answer1, answer2):
       messages=[
           {"role": "user", "content": prompt}
       ],
-      temperature=temp,
-      max_tokens=500
+      temperature=temp
       )
     scores = response.choices[0].message.content
 
@@ -155,8 +149,5 @@ def judge_answers(judge_model, temp, question, answer1, answer2):
         messages=[{"role": "user", "content": prompt}],
     )
     scores = message.choices[0].message.content
-
-  return scores
-
 
   return scores
