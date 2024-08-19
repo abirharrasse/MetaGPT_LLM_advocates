@@ -19,10 +19,10 @@ client_openai = OpenAI(api_key = openai_api_key)
 genai.configure(api_key = gemini_api_key)
 
 
-models = {"opus": "claude-3-opus-20240229", "haiku": "claude-3-haiku-20240307", "sonnet": "claude-3-sonnet-20240229", "llama3_8": "meta-llama/Meta-Llama-3-8B-Instruct-Turbo",
-          "llama3_70": 'meta-llama/Llama-3-70b-chat-hf', 'llama3.1_8': "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
+models = {"opus": "claude-3-opus-20240229", "haiku": "claude-3-haiku-20240307", "sonnet": "claude-3-sonnet-20240229", "llama": "meta-llama/Meta-Llama-3-8B-Instruct-Turbo",
+          "llama2": '	deepseek-ai/deepseek-llm-67b-chat',
           "mistral": "mistralai/Mixtral-8x22B-Instruct-v0.1", "Qwen": "Qwen/Qwen2-72B-Instruct",
-          "Yi": "zero-one-ai/Yi-34B-Chat", "gemma": "google/gemma-7b-it", "cohere": "command-r-plus", "gemini": 'gemini-pro',
+          "Yi": "zero-one-ai/Yi-34B-Chat", "cohere": "command-r-plus", "gemini": 'gemini-pro',
           "gpt-4-turbo": "gpt-4-turbo-preview", "gpt-4o": "gpt-4o", "gpt-3.5-turbo":"gpt-3.5-turbo"}
 
 
